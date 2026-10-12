@@ -1,0 +1,50 @@
+{
+  "backend": "local",
+  "local": {
+    "path": "data/flightlog.xlsx",
+    "seed": "Example.xlsx"
+  },
+  "google": {
+    "url": "",
+    "token": ""
+  },
+
+  "timezone": "Europe/Berlin",
+  "sheets": {
+    "flights": "Fluglog",
+    "drones": "Overview",
+    "batteries": "Batteries",
+    "locations": "Orte"
+  },
+
+  "flight_rules": ["BVLOS", "VLOS"],
+  "status_options": ["erfolgreich", "abgebrochen", "nur schweben"],
+  "battery_prefix": { "main": "M", "aux": "A" },
+
+  "limits": {
+    "wind_kt": 20,
+    "gust_kt_below": 27,
+    "visibility_m": 200,
+    "ceiling_m": 120,
+    "temp_min_c": 2,
+    "temp_max_c": 50,
+    "daylight_margin_min": 30,
+    "metar_max_age_min": 90
+  },
+  "no_flight_wx": {
+    "RA": "Regen",
+    "SN": "Schnee",
+    "SG": "Schneegriesel",
+    "IC": "Eisnadeln",
+    "PL": "Eiskörner",
+    "GR": "Hagel",
+    "GS": "Graupel",
+    "FC": "Tornado / Windhose",
+    "TS": "Gewitter",
+    "SS": "Sandsturm"
+  },
+
+  "drone_status": { "NoGo": "fail", "storage": "fail", "caution": "warn" },
+  "battery_status": { "ready": "ok", "used": "warn", "storage": "fail" },
+  "space_weather": { "warn_from": 2, "fail_from": 3 }
+}

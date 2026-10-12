@@ -1,0 +1,7 @@
+{
+  "backend": "google",
+  "google": {
+    "url": "https://script.google.com/macros/s/XXXXXXXX/exec",
+    "token": "dein-langer-zufallswert"
+  }
+}

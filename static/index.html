@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eFlightLogger</title>
+<style>
+  :root {
+    --bg: #1c1c1c; --card: #2b2b2b; --field: #343638; --border: #565b5e;
+    --text: #dce4ee; --muted: #9aa3ad;
+    --blue: #1f6aa5; --blue-d: #144870; --blue-h: #36719f;
+    --ok: #0b9a0b; --warn: #c79100; --fail: #c62828; --neutral: #3d3d3d;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.35 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  header { text-align: center; padding: 10px; font-weight: 600; background: #181818; border-bottom: 1px solid #000; }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; max-width: 1040px; margin: 0 auto; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+  .col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .card { background: var(--card); border-radius: 8px; padding: 10px 8px; }
+  .card.locked > .lockable { opacity: .6; pointer-events: none; }
+  label.l { display: block; font-weight: 600; margin: 6px 0 3px; }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .grow { flex: 1; min-width: 0; }
+
+  select, input[type=text] { width: 100%; height: 30px; border-radius: 6px; color: var(--text); font: inherit; padding: 0 10px; }
+  input[type=text] { background: var(--field); border: 2px solid var(--border); }
+  input[type=text]:focus { outline: none; border-color: var(--blue); }
+  select { appearance: none; -webkit-appearance: none; background: var(--blue); border: 0; color: #fff; font-weight: 600;
+           padding-right: 34px; cursor: pointer;
+           background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='white' stroke-width='2' fill='none'/%3E%3C/svg%3E"), linear-gradient(var(--blue-d), var(--blue-d));
+           background-repeat: no-repeat; background-position: right 9px center, right top; background-size: 12px 8px, 30px 100%; }
+  select:disabled, input:disabled { opacity: .75; }
+  select option { background: #2b2b2b; color: var(--text); }
+
+  .status { font-size: 13px; }
+  .status.ok { color: #1fb21f; } .status.warn { color: #e0aa10; } .status.fail { color: #ef5350; }
+  .when { color: #e8edf3; margin: 2px 0 4px; font-variant-numeric: tabular-nums; }
+
+  .switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; font-weight: 600; }
+  .switch input { display: none; }
+  .switch .knob { width: 30px; height: 16px; border-radius: 8px; background: #4a4a4a; position: relative; transition: .15s; }
+  .switch .knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #d0d0d0; transition: .15s; }
+  .switch input:checked + .knob { background: var(--blue); }
+  .switch input:checked + .knob::after { left: 16px; background: #fff; }
+
+  .tiles { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; margin-top: 12px; }
+  .tile { width: 112px; border-radius: 6px; background: #333; overflow: hidden; text-align: center; }
+  .tile .top { padding: 7px 4px; font-weight: 700; background: var(--neutral); min-height: 31px; }
+  .tile .bot { font-size: 11px; padding: 5px 4px; color: #ddd; min-height: 24px; }
+  .tile.ok .top { background: var(--ok); } .tile.warn .top { background: var(--warn); } .tile.fail .top { background: var(--fail); }
+  .tile.small { width: 84px; }
+  .raw { margin-top: 8px; font: 12px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); word-break: break-all; }
+  .manual { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 8px; margin-top: 10px; }
+  .manual label { font-size: 11px; color: var(--muted); }
+  .manual input { height: 26px; }
+
+  .space { display: flex; gap: 8px; margin-top: 6px; }
+  .sw { width: 44px; border: 2px solid var(--neutral); border-radius: 4px; text-align: center; background: #232323; color: var(--muted); }
+  .sw b { display: block; font-size: 20px; line-height: 26px; }
+  .sw small { display: block; font-size: 8px; padding-bottom: 2px; }
+  .sw.ok { border-color: var(--ok); color: #1fb21f; } .sw.warn { border-color: var(--warn); color: #e0aa10; } .sw.fail { border-color: var(--fail); color: #ef5350; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+  .batt { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px 12px; }
+  .batt .cfg { color: var(--text); min-width: 110px; }
+
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 6px; color: #fff; background: var(--blue); cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--blue-h); }
+  button:disabled { background: var(--blue-d); color: #7c8a98; cursor: not-allowed; }
+  .big { width: 100%; height: 44px; font-size: 15px; }
+  .linkbtn { background: none; color: var(--muted); font-weight: 400; text-decoration: underline; padding: 2px 4px; }
+  .linkbtn:hover:not(:disabled) { background: none; color: var(--text); }
+  .smallbtn { height: 26px; padding: 0 12px; }
+
+  .dbg { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding: 2px 4px; }
+  .dbg.on { color: #ffb74d; font-weight: 600; }
+  .reasons { font-size: 13px; padding: 2px 4px; display: flex; flex-direction: column; gap: 2px; }
+  .reasons .fail { color: #ef5350; } .reasons .warn { color: #e0aa10; } .reasons .info { color: #ffb74d; }
+  details.all { font-size: 12px; color: var(--muted); padding: 2px 4px; }
+  details.all summary { cursor: pointer; }
+  details.all div { display: grid; grid-template-columns: 12px 130px 1fr; gap: 2px 6px; margin-top: 4px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; background: var(--ok); }
+  .dot.warn { background: var(--warn); } .dot.fail { background: var(--fail); }
+
+  .elapsed { color: #6fb3ea; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .newloc { display: none; grid-template-columns: 1.4fr 1fr 1fr auto auto; gap: 6px; margin-top: 8px; align-items: end; }
+  .newloc.show { display: grid; }
+  .newloc label { font-size: 11px; color: var(--muted); display: block; }
+  #toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); padding: 10px 18px; border-radius: 8px;
+           background: #333; border: 1px solid #555; opacity: 0; pointer-events: none; transition: opacity .2s; max-width: 90vw; }
+  #toast.show { opacity: 1; } #toast.err { border-color: var(--fail); } #toast.ok { border-color: var(--ok); }
+</style>
+</head>
+<body>
+<header>eFlightLogger <span id="backendTag" class="status" style="margin-left:8px"></span></header>
+
+<main>
+  <!-- LEFT: pre-flight parameters -->
+  <div class="col" id="left">
+    <div class="card"><div class="lockable">
+      <label class="l" for="drone">Drone:</label>
+      <div class="row"><div style="width:230px"><select id="drone"></select></div><span id="droneStatus" class="status"></span></div>
+    </div></div>
+
+    <div class="card"><div class="lockable">
+      <div class="when" id="clock"></div>
+      <label class="l" for="rules">Flight rules:</label>
+      <div class="row">
+        <div style="width:230px"><select id="rules"></select></div>
+        <label class="switch"><input type="checkbox" id="manualOn"><span class="knob"></span>Manual entry</label>
+        <label class="switch"><input type="checkbox" id="rawOn"><span class="knob"></span>raw</label>
+      </div>
+      <label class="l" for="location">Location:</label>
+      <div style="max-width:400px"><select id="location"></select></div>
+      <div class="newloc" id="newloc">
+        <div><label>Name</label><input type="text" id="nlName"></div>
+        <div><label>Lat</label><input type="text" id="nlLat" placeholder="49.643"></div>
+        <div><label>Lon</label><input type="text" id="nlLon" placeholder="10.960"></div>
+        <button class="smallbtn" id="nlAdd">Add</button>
+        <button class="smallbtn linkbtn" id="nlCancel">×</button>
+      </div>
+
+      <div class="tiles" id="tiles"></div>
+      <div id="manualBox" class="manual" hidden>
+        <div><label>Temp °C</label><input type="text" id="m_temp"></div>
+        <div><label>Wind m/s</label><input type="text" id="m_wind"></div>
+        <div><label>Gust m/s</label><input type="text" id="m_gust"></div>
+        <div><label>Visibility m</label><input type="text" id="m_vis"></div>
+        <div><label>Ceiling m (leer = keins)</label><input type="text" id="m_ceil"></div>
+        <div><label>Wx-Codes (z. B. RA TS)</label><input type="text" id="m_wx"></div>
+      </div>
+      <div class="raw" id="raw" hidden></div>
+
+      <label class="l" style="margin-top:14px">Space weather:</label>
+      <div class="space" id="space"></div>
+    </div></div>
+
+    <div class="card"><div class="lockable">
+      <div class="batt">
+        <div><label class="l" for="mainB">Main Battery:</label><select id="mainB"></select></div>
+        <span id="mainBStatus" class="status"></span><span class="cfg" id="mainBCfg"></span>
+        <div><label class="l" for="auxB">Aux Battery:</label><select id="auxB"></select></div>
+        <span id="auxBStatus" class="status"></span><span class="cfg" id="auxBCfg"></span>
+      </div>
+    </div></div>
+
+    <div class="card"><div class="lockable">
+      <div class="grid2">
+        <div><label class="l" for="operator">Operator:</label><input type="text" id="operator" list="persons"></div>
+        <div><label class="l" for="obs1">Airspace Observer 1:</label><input type="text" id="obs1" list="persons"></div>
+        <div><label class="l" for="backup">Backup-Pilot:</label><input type="text" id="backup" list="persons"></div>
+        <div><label class="l" for="obs2">Airspace Observer 2:</label><input type="text" id="obs2" list="persons"></div>
+      </div>
+      <datalist id="persons"></datalist>
+    </div></div>
+  </div>
+
+  <!-- RIGHT: fly + post-flight -->
+  <div class="col">
+    <button class="big" id="fly" disabled>Fly!</button>
+    <label class="dbg" id="dbgLabel"><input type="checkbox" id="debug"> Debug-Modus (Fly! auch bei Verstößen)</label>
+    <div class="reasons" id="reasons"></div>
+    <details class="all"><summary>Alle Prüfungen</summary><div id="allChecks"></div></details>
+
+    <div class="card" id="post" style="margin-top:4px"><div class="lockable">
+      <div id="flightInfo" class="status" style="margin:0 0 4px" hidden></div>
+      <label class="l" for="ftime">Flight time (prelim):</label>
+      <div style="width:220px"><input type="text" id="ftime" disabled></div>
+      <label class="l" for="fdist">Flight distance (prelim)</label>
+      <div style="width:220px"><input type="text" id="fdist" disabled placeholder="km"></div>
+      <label class="l" for="fstatus">Status:</label>
+      <div style="width:220px"><select id="fstatus" disabled></select></div>
+      <label class="l" for="comment">Comment</label>
+      <input type="text" id="comment" disabled>
+      <div style="height:24px"></div>
+    </div></div>
+    <button class="big" id="save" disabled>Save</button>
+    <button class="linkbtn" id="discard" hidden>Vorgemerkten Flug verwerfen</button>
+  </div>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let master = null, pending = null, last = null, seq = 0, timer = null, timeEdited = false;
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(data.error || r.statusText), {data});
+  return data;
+}
+function toast(msg, kind = "ok") {
+  const t = $("toast"); t.textContent = msg; t.className = "show " + kind;
+  clearTimeout(t._h); t._h = setTimeout(() => t.className = "", 3500);
+}
+function fillSelect(sel, items, keep, extra) {
+  const cur = keep ?? sel.value;
+  sel.innerHTML = items.map(v => `<option>${esc(v)}</option>`).join("") + (extra || "");
+  if (items.includes(cur)) sel.value = cur;
+}
+
+// ---------- form state ----------
+function formState() {
+  return {
+    drone: $("drone").value, location: $("location").value, flight_rules: $("rules").value,
+    main_battery: $("mainB").value, aux_battery: $("auxB").value,
+    operator: $("operator").value, backup_pilot: $("backup").value,
+    observer1: $("obs1").value, observer2: $("obs2").value,
+    manual: {enabled: $("manualOn").checked, temp_c: $("m_temp").value, wind_ms: $("m_wind").value,
+             gust_ms: $("m_gust").value, visibility_m: $("m_vis").value, ceiling_m: $("m_ceil").value, wx: $("m_wx").value},
+  };
+}
+function applyForm(f) {
+  $("drone").value = f.drone; $("location").value = f.location; $("rules").value = f.flight_rules;
+  $("mainB").value = f.main_battery; $("auxB").value = f.aux_battery;
+  $("operator").value = f.operator || ""; $("backup").value = f.backup_pilot || "";
+  $("obs1").value = f.observer1 || ""; $("obs2").value = f.observer2 || "";
+  const m = f.manual || {};
+  $("manualOn").checked = !!m.enabled;
+  $("m_temp").value = m.temp_c ?? ""; $("m_wind").value = m.wind_ms ?? ""; $("m_gust").value = m.gust_ms ?? "";
+  $("m_vis").value = m.visibility_m ?? ""; $("m_ceil").value = m.ceiling_m ?? ""; $("m_wx").value = m.wx ?? "";
+  $("manualBox").hidden = !m.enabled;
+}
+const LEFT_KEY = "eflightlogger.left";
+function saveLeft() { try { localStorage.setItem(LEFT_KEY, JSON.stringify(formState())); } catch (e) {} }
+function loadLeft() { try { return JSON.parse(localStorage.getItem(LEFT_KEY)); } catch (e) { return null; } }
+
+// ---------- check + render ----------
+async function runCheck() {
+  const my = ++seq;
+  let ev;
+  try { ev = await api("/api/check", formState()); }
+  catch (e) { if (my === seq) toast("Prüfung fehlgeschlagen: " + e.message, "err"); return; }
+  if (my !== seq) return;
+  last = ev; render();
+}
+let deb; function scheduleCheck() { saveLeft(); clearTimeout(deb); deb = setTimeout(runCheck, 300); }
+
+function chk(id) { return last?.checks.find(c => c.id === id); }
+function stat(id) { return chk(id)?.status || ""; }
+function worse(...ids) { const r = {ok: 0, warn: 1, fail: 2}; return ids.map(stat).filter(Boolean).sort((a, b) => r[b] - r[a])[0] || ""; }
+
+function render() {
+  if (!last) return;
+  const w = last.weather, M = master;
+  // drone / battery labels
+  const d = M.drones.find(x => x.name === $("drone").value);
+  setStatus("droneStatus", stat("drone"), d?.status || "ready");
+  for (const [sel, lab, cfg, list, id] of [["mainB", "mainBStatus", "mainBCfg", M.main_batteries, "main_battery"],
+                                           ["auxB", "auxBStatus", "auxBCfg", M.aux_batteries, "aux_battery"]]) {
+    const b = list.find(x => x.name === $(sel).value);
+    setStatus(lab, stat(id), b?.status || "");
+    $(cfg).textContent = b?.config ? "Config: " + b.config : "";
+  }
+  // weather tiles
+  const tiles = [];
+  if (w) {
+    const dir = w.wind_dir == null || w.wind_dir === "" ? "" : (w.wind_dir === "VRB" ? "VRB" : w.wind_dir + "°");
+    tiles.push(`<div class="tile"><div class="top">${esc(w.manual ? "manual" : w.station)}</div><div class="bot">${w.distance_km != null ? w.distance_km + " km" : ""}</div></div>`);
+    tiles.push(tile(stat("temp"), w.temp_c != null ? w.temp_c + " °C" : "–", ""));
+    tiles.push(tile(worse("wind"), w.wind_ms + " m/s", dir + (w.gust_ms ? ` · G ${w.gust_ms}` : "")));
+    tiles.push(tile(stat("vis"), w.visibility_m != null ? (w.visibility_m >= 9999 ? "≥10 km" : w.visibility_m + " m") : "–", "Sicht", "small"));
+    tiles.push(tile(stat("ceiling"), w.ceiling_m != null ? Math.round(w.ceiling_m) + " m" : "–", "Ceiling", "small"));
+    tiles.push(tile(stat("wx"), w.wx.length ? w.wx.join(" ") : "none", "Wetter", "small"));
+  } else {
+    tiles.push(`<div class="tile"><div class="top">–</div><div class="bot">keine Station</div></div>`);
+  }
+  const wxWorst = worse("temp", "wind", "vis", "ceiling", "wx", "wx_data", "metar_age", "daylight");
+  tiles.push(`<span class="status ${wxWorst}" style="align-self:center">${{ok: "ready", warn: "check", fail: "blocked", "": ""}[wxWorst]}</span>`);
+  $("tiles").innerHTML = tiles.join("");
+  $("raw").hidden = !$("rawOn").checked; $("raw").textContent = w ? w.raw : "";
+  // space weather
+  $("space").innerHTML = ["R", "S", "G"].map(k => {
+    const s = last.space?.[k], st = stat("space_" + k);
+    return `<div class="sw ${st}"><b>${k}</b><small>${s ? k + s.scale + " " + esc(s.text) : "n/a"}</small></div>`;
+  }).join("");
+  // fly button + reasons
+  const sum = last.summary, dbg = $("debug").checked;
+  const reasons = [];
+  for (const c of sum.violations) reasons.push(`<div class="fail">✖ ${esc(c.label)}: ${esc(c.detail)}</div>`);
+  for (const c of sum.warnings) reasons.push(`<div class="warn">⚠ ${esc(c.label)}: ${esc(c.detail)}</div>`);
+  for (const e of last.errors) reasons.push(`<div class="warn">⚠ ${esc(e)}</div>`);
+  if (dbg && sum.violations.length) reasons.unshift(`<div class="info">Debug aktiv: Fly! ist trotz ${sum.violations.length} Verstoß/Verstößen möglich (wird im Kommentar vermerkt).</div>`);
+  $("reasons").innerHTML = pending ? "" : reasons.join("");
+  $("allChecks").innerHTML = last.checks.map(c => `<span class="dot ${c.status}"></span><span>${esc(c.label)}</span><span>${esc(c.detail)}</span>`).join("");
+  updateButtons();
+}
+function tile(st, top, bot, cls = "") { return `<div class="tile ${st} ${cls}"><div class="top">${esc(top)}</div><div class="bot">${esc(bot)}</div></div>`; }
+function setStatus(id, st, text) { const e = $(id); e.className = "status " + st; e.textContent = text; }
+
+function updateButtons() {
+  const ok = last && (last.summary.can_fly || $("debug").checked);
+  $("fly").disabled = !!pending || !ok;
+  $("fly").textContent = pending ? "Flug läuft …" : "Fly!";
+  $("save").disabled = !pending;
+  $("discard").hidden = !pending;
+  $("dbgLabel").classList.toggle("on", $("debug").checked);
+}
+
+// ---------- pending flight ----------
+function elapsedMin() { return (Date.now() - new Date(pending.started)) / 60000; }
+function tickFlight() {
+  if (!pending) return;
+  const s = Math.floor(elapsedMin() * 60), mm = String(Math.floor(s / 60)).padStart(2, "0"), ss = String(s % 60).padStart(2, "0");
+  const t = new Date(pending.started);
+  $("flightInfo").className = "status elapsed";
+  $("flightInfo").textContent = `Flug seit ${t.toLocaleTimeString("de-DE", {hour: "2-digit", minute: "2-digit"})} · ${mm}:${ss}` + (pending.debug && pending.overridden.length ? " · DEBUG" : "");
+  if (!timeEdited && s % 15 === 0) $("ftime").value = (elapsedMin()).toFixed(1);
+}
+function setPending(p) {
+  pending = p; timeEdited = false;
+  document.querySelectorAll("#left .card").forEach(c => c.classList.toggle("locked", !!p));
+  document.querySelectorAll("#left input, #left select, #left button").forEach(e => e.disabled = !!p);
+  for (const id of ["ftime", "fdist", "fstatus", "comment"]) $(id).disabled = !p;
+  $("flightInfo").hidden = !p;
+  if (p) { applyForm(p.form); $("ftime").value = elapsedMin().toFixed(1); tickFlight(); }
+  else { for (const id of ["ftime", "fdist", "comment"]) $(id).value = ""; }
+  render();
+}
+
+$("fly").onclick = async () => {
+  try { setPending(await api("/api/fly", {form: formState(), debug: $("debug").checked})); }
+  catch (e) { toast(e.message, "err"); runCheck(); }
+};
+$("save").onclick = async () => {
+  try {
+    await api("/api/save", {flight_time: $("ftime").value, flight_distance: $("fdist").value, status: $("fstatus").value, comment: $("comment").value});
+    setPending(null); toast("Flug gespeichert", "ok"); runCheck();
+  } catch (e) { toast(e.message, "err"); }
+};
+$("discard").onclick = async () => {
+  if (!confirm("Vorgemerkten Flug wirklich verwerfen? Es wird nichts gespeichert.")) return;
+  await api("/api/cancel", {}); setPending(null); runCheck();
+};
+$("ftime").addEventListener("input", () => timeEdited = true);
+$("debug").onchange = () => { try { localStorage.setItem("eflightlogger.debug", $("debug").checked ? "1" : ""); } catch (e) {} render(); };
+
+// ---------- manual entry / raw ----------
+$("manualOn").onchange = () => {
+  $("manualBox").hidden = !$("manualOn").checked;
+  if ($("manualOn").checked && last?.weather && !last.weather.manual) {   // start from the last METAR values
+    const w = last.weather;
+    $("m_temp").value = w.temp_c ?? ""; $("m_wind").value = w.wind_ms ?? ""; $("m_gust").value = w.gust_ms ?? "";
+    $("m_vis").value = w.visibility_m ?? ""; $("m_ceil").value = w.ceiling_m != null ? Math.round(w.ceiling_m) : ""; $("m_wx").value = w.wx.join(" ");
+  }
+  scheduleCheck();
+};
+$("rawOn").onchange = render;
+
+// ---------- new location ----------
+const NEW = "＋ Neuer Ort …";
+let prevLocation = "";
+$("location").onchange = () => {
+  if ($("location").value === NEW) { $("newloc").classList.add("show"); $("location").value = prevLocation; }
+  else prevLocation = $("location").value;
+  scheduleCheck();
+};
+$("nlCancel").onclick = () => $("newloc").classList.remove("show");
+$("nlAdd").onclick = async () => {
+  try {
+    const r = await api("/api/locations", {name: $("nlName").value, lat: $("nlLat").value, lon: $("nlLon").value});
+    await loadMaster(r.name); $("newloc").classList.remove("show");
+    for (const id of ["nlName", "nlLat", "nlLon"]) $(id).value = "";
+    toast("Ort gespeichert", "ok"); scheduleCheck();
+  } catch (e) { toast(e.message, "err"); }
+};
+
+// ---------- boot ----------
+async function loadMaster(selectLocation) {
+  master = await api("/api/master?refresh=1");
+  const prev = loadLeft() || {};
+  fillSelect($("drone"), master.drones.map(d => d.name), prev.drone);
+  fillSelect($("rules"), master.flight_rules, prev.flight_rules);
+  fillSelect($("location"), master.locations.map(l => l.name), selectLocation || prev.location, `<option>${NEW}</option>`);
+  prevLocation = $("location").value;
+  fillSelect($("mainB"), master.main_batteries.map(b => b.name), prev.main_battery);
+  fillSelect($("auxB"), master.aux_batteries.map(b => b.name), prev.aux_battery);
+  fillSelect($("fstatus"), ["", ...master.status_options], "");
+  $("persons").innerHTML = master.persons.map(p => `<option value="${esc(p)}">`).join("");
+  $("backendTag").textContent = master.backend === "google" ? "● Google Sheets" : "● lokal (xlsx)";
+}
+
+(async function boot() {
+  try {
+    await loadMaster();
+    const prev = loadLeft();
+    if (prev) { const keep = {...formState(), operator: prev.operator, backup_pilot: prev.backup_pilot, observer1: prev.observer1, observer2: prev.observer2, manual: prev.manual}; applyForm(keep); }
+    try { $("debug").checked = !!localStorage.getItem("eflightlogger.debug"); } catch (e) {}
+    const p = await api("/api/pending");
+    if (p) setPending(p);
+    await runCheck();
+  } catch (e) { toast("Start fehlgeschlagen: " + e.message, "err"); }
+  for (const id of ["drone", "rules", "mainB", "auxB", "operator", "backup", "obs1", "obs2", "m_temp", "m_wind", "m_gust", "m_vis", "m_ceil", "m_wx"])
+    $(id).addEventListener("input", scheduleCheck);
+  setInterval(runCheck, 60000);
+  setInterval(() => {
+    $("clock").textContent = new Date().toLocaleString("de-DE", {day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit"}).replace(", ", " - ");
+    tickFlight();
+  }, 1000);
+})();
+</script>
+</body>
+</html>
