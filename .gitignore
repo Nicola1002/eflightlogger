@@ -6,5 +6,4 @@ config.local.json
 
 # private input files (not part of the repo)
 Betriebsgrenzen.pdf
-Example.xlsx
 image.png

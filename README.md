@@ -11,8 +11,7 @@ python3 -m venv .venv
 ```
 
 Standardmäßig (`"backend": "local"` in `config.json`, überschreibbar in `config.local.json`) wird in `data/flightlog.xlsx` geschrieben.
-Beim ersten Start wird die Datei aus `Example.xlsx` kopiert (liegt nicht im Repo – die Excel-Datei mit den Blättern
-`Overview`, `Fluglog`, `Batteries` selbst in den Projektordner legen; das Original bleibt unverändert).
+Beim ersten Start wird die Datei aus `Example.xlsx` kopiert – das Original bleibt unverändert.
 
 ## Bedienung
 
