@@ -2,6 +2,7 @@
 __pycache__/
 data/
 config.local.json
+client_secret*.json
 .DS_Store
 
 # private input files (not part of the repo)

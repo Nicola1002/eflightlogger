@@ -3,3 +3,6 @@ openpyxl==3.1.5
 requests==2.34.2
 astral==3.2
 tzdata==2026.5
+google-auth==2.62.0
+google-auth-oauthlib==1.5.0
+google-api-python-client==2.201.0
