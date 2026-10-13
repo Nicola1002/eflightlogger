@@ -1,4 +1,4 @@
-"""eFlightLogger – local web UI that fills the flight log (xlsx or Google Sheet).
+"""eFlightLogger – local web UI that fills the flight log (xlsx or Google Sheet via OAuth).
 
 Start:  python app.py      (opens http://127.0.0.1:8765)
 """
@@ -10,11 +10,13 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, redirect, request, send_from_directory, session
+from googleapiclient.errors import HttpError
 
 import checks
 import weather
-from storage import make_backend
+from auth import GoogleAuth
+from storage import NotAuthenticated, make_backend
 
 BASE = Path(__file__).resolve().parent
 
@@ -28,7 +30,7 @@ def _merge(base, over):
     return base
 
 
-# config.json is committed; config.local.json (git-ignored) holds backend selection and the Google token
+# config.json is committed; config.local.json (git-ignored) holds backend selection and the spreadsheet id
 CFG = json.loads((BASE / "config.json").read_text(encoding="utf-8"))
 if (BASE / "config.local.json").exists():
     _merge(CFG, json.loads((BASE / "config.local.json").read_text(encoding="utf-8")))
@@ -41,10 +43,14 @@ PENDING.parent.mkdir(exist_ok=True)
 LOCATION_HEADERS = ["Ort", "Lat", "Lon"]
 LOCATION_SEED = [["Möhrendorf", 49.643001, 10.960292]]
 
-store = make_backend(CFG, BASE)
-store.ensure_sheet(SHEETS["locations"], LOCATION_HEADERS, LOCATION_SEED)
+HOST, PORT = "127.0.0.1", 8765
+GOOGLE = CFG["backend"] == "google"
+auth = GoogleAuth(BASE, CFG["google"]["client_secret_file"], f"http://{HOST}:{PORT}/auth/callback")
+store = make_backend(CFG, BASE, auth.credentials)
 
 app = Flask(__name__, static_folder="static")
+app.secret_key = auth.secret_key()
+_ready = False  # the Orte sheet is ensured once; for Google only possible after login
 _master = {"t": 0, "data": None}
 _lock = threading.Lock()
 
@@ -57,8 +63,16 @@ def _num(v):
         return None
 
 
+def _ensure_locations():
+    global _ready
+    if not _ready:
+        store.ensure_sheet(SHEETS["locations"], LOCATION_HEADERS, LOCATION_SEED)
+        _ready = True
+
+
 def load_master(force=False):
     with _lock:
+        _ensure_locations()
         if not force and _master["data"] and time.time() - _master["t"] < 30:
             return _master["data"]
         drones = [{"name": str(r["Drones"]).strip(), "status": r.get("Status"),
@@ -84,6 +98,7 @@ def load_master(force=False):
             "status_options": sorted({*CFG["status_options"], *[str(f["Status"]) for f in flights if f.get("Status")]},
                                      key=str.lower),
             "backend": CFG["backend"],
+            "user": auth.user() if GOOGLE else None,
         }
         _master.update(t=time.time(), data=data)
         return data
@@ -129,6 +144,62 @@ def read_pending():
         return json.loads(PENDING.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
         return None
+
+
+# ---------- auth ----------
+@app.errorhandler(NotAuthenticated)
+def _not_authenticated(_):
+    return jsonify(error="Nicht bei Google angemeldet", login_url="/auth/login"), 401
+
+
+@app.errorhandler(HttpError)
+def _google_error(e):
+    code = e.resp.status
+    if code in (401, 403, 404):
+        hint = {401: "Google-Login abgelaufen – bitte neu anmelden",
+                403: "Kein Zugriff auf die Tabelle – Freigabe für dieses Google-Konto prüfen",
+                404: "Tabelle nicht gefunden – google.spreadsheet_id prüfen"}[code]
+        return jsonify(error=hint, **({"login_url": "/auth/login"} if code == 401 else {})), code
+    return jsonify(error=f"Google Sheets API: {e}"), 502
+
+
+@app.get("/api/me")
+def api_me():
+    if not GOOGLE:
+        return jsonify(backend=CFG["backend"], user=None, login_needed=False)
+    return jsonify(backend="google", user=auth.user(), configured=auth.configured(),
+                   login_needed=auth.credentials() is None)
+
+
+@app.get("/auth/login")
+def auth_login():
+    if not GOOGLE:
+        return redirect("/")
+    try:
+        url, state, verifier = auth.start()
+    except RuntimeError as e:
+        return jsonify(error=str(e)), 500
+    session["oauth"] = {"state": state, "verifier": verifier}
+    return redirect(url)
+
+
+@app.get("/auth/callback")
+def auth_callback():
+    o = session.pop("oauth", None)
+    if not o or request.args.get("state") != o["state"]:
+        return jsonify(error="Ungültiger Login-Status – bitte erneut anmelden"), 400
+    if request.args.get("error"):
+        return jsonify(error=f"Login abgebrochen: {request.args['error']}"), 400
+    auth.finish(request.url, o["state"], o["verifier"])
+    _master.update(t=0, data=None)
+    return redirect("/")
+
+
+@app.post("/auth/logout")
+def auth_logout():
+    auth.logout()
+    _master.update(t=0, data=None)
+    return jsonify(ok=True)
 
 
 # ---------- routes ----------
@@ -234,6 +305,8 @@ def api_save():
     }
     try:
         store.append_row(SHEETS["flights"], row)
+    except (NotAuthenticated, HttpError):
+        raise  # handled by the error handlers above (401 / readable Google error)
     except Exception as e:
         return jsonify(error=f"Schreiben fehlgeschlagen: {e}"), 502
     PENDING.unlink(missing_ok=True)
@@ -258,7 +331,7 @@ def api_add_location():
 
 
 if __name__ == "__main__":
-    url = "http://127.0.0.1:8765"
+    url = f"http://{HOST}:{PORT}"
     threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     print(f"eFlightLogger läuft auf {url}  (Backend: {CFG['backend']})")
-    app.run(host="127.0.0.1", port=8765, debug=False, threaded=True)
+    app.run(host=HOST, port=PORT, debug=False, threaded=True)

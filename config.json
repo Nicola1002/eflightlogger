@@ -5,8 +5,8 @@
     "seed": "Example.xlsx"
   },
   "google": {
-    "url": "",
-    "token": ""
+    "spreadsheet_id": "",
+    "client_secret_file": "client_secret.json"
   },
 
   "timezone": "Europe/Berlin",

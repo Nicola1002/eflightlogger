@@ -95,7 +95,8 @@
 </style>
 </head>
 <body>
-<header>eFlightLogger <span id="backendTag" class="status" style="margin-left:8px"></span></header>
+<header>eFlightLogger <span id="backendTag" class="status" style="margin-left:8px"></span>
+  <span id="userChip" style="margin-left:12px;font-weight:400;font-size:12px"></span></header>
 
 <main>
   <!-- LEFT: pre-flight parameters -->
@@ -191,8 +192,16 @@ let master = null, pending = null, last = null, seq = 0, timer = null, timeEdite
 async function api(path, body) {
   const r = await fetch(path, body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
   const data = await r.json().catch(() => ({}));
+  if (r.status === 401 && data.login_url) showLogin();
   if (!r.ok) throw Object.assign(new Error(data.error || r.statusText), {data});
   return data;
+}
+function showLogin() {
+  $("userChip").innerHTML = `<a href="/auth/login" style="color:inherit;font-weight:600">Mit Google anmelden</a>`;
+}
+async function logout() {
+  await api("/auth/logout", {});
+  location.reload();
 }
 function toast(msg, kind = "ok") {
   const t = $("toast"); t.textContent = msg; t.className = "show " + kind;
@@ -387,6 +396,16 @@ async function loadMaster(selectLocation) {
 
 (async function boot() {
   try {
+    const me = await api("/api/me");
+    if (me.backend === "google") {
+      $("backendTag").textContent = "● Google Sheets";
+      if (me.login_needed) {
+        showLogin();
+        toast(me.configured ? "Bitte mit Google anmelden" : "client_secret.json fehlt – siehe README", "err");
+        return;
+      }
+      if (me.user) $("userChip").innerHTML = `${esc(me.user.name || me.user.email || "")} · <a href="#" onclick="logout();return false" style="color:inherit">Abmelden</a>`;
+    }
     await loadMaster();
     const prev = loadLeft();
     if (prev) { const keep = {...formState(), operator: prev.operator, backup_pilot: prev.backup_pilot, observer1: prev.observer1, observer2: prev.observer2, manual: prev.manual}; applyForm(keep); }
